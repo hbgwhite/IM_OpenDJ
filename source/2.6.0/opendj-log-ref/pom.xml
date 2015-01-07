@@ -31,12 +31,12 @@
  <modelVersion>4.0.0</modelVersion>
 
  <parent>
-  <artifactId>opendj-server</artifactId>
-  <groupId>org.forgerock.opendj</groupId>
+  <artifactId>opendj_release-server</artifactId>
+  <groupId>org.forgerock.opendj_release</groupId>
   <version>2.6.0</version>
  </parent>
 
- <artifactId>opendj-log-ref</artifactId>
+ <artifactId>opendj_release-log-ref</artifactId>
  <name>OpenDJ Directory Server Log Reference Sources</name>
  <description>
     The module builds the OpenDJ directory server log reference sources in
