@@ -1,3 +1,8 @@
+----
+> # NOTE: This development repository is no longer being updated as of 3/25/2016.
+> # Please use the [release version](https://bitbucket.org/sbacoss/opendj_release) of this repository.
+----
+
 # Welcome to the OpenDJ Project #
 
 ## About

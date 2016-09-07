@@ -36,6 +36,18 @@ use HTTP::Request;
 #                                                                                                 #
 # Change Log:                                                                                     #   
 #                                                                                                 #
+#  11/27/2015 - Modified processPasswordReset() to allow optional app defined message to be       #
+#               included in password reset message.                                               #
+#  02/27/2015 - Added translation of encoded CERs to Tenancy Chain received through XML           #
+#  02/25/2015 - Added translation of encoded apostrophe, quotes, ampersand, lesser than and       #
+#               greater than to email (and, consequently, uid which is a duplicate of email),     #
+#               first name, and last name values received through XML                             #
+#  02/25/2015 - Added translation of encoded apostrophe to standard apostrophe                    #
+#  02/20/2015 - Update $adminEmail from lschneider@amplify.com to sbacssoerrors@listserv.air.org  #
+#  02/02/2015 - Update $adminEmail from '<jkimelman@amplify.com>' to 'lschneider@amplify.com'     #
+#  02/02/2015 - Update $adminEmail from 'schung@amplify.com' to '<jkimelman@amplify.com>'         #
+#  01/29/2015 - Change $emailBody in processAddAction() from "fall of 2014" to "spring of 2015"   #
+#  10/29/2014 - Updated email server to mail.opentestsystem.org:10025 per Rami Levi request #959  #
 #  05/28/2014 - Added code to escape the following characters in the DN: " # + , ; < = > \        #
 #  05/12/2014 - Updated email server to mail-dev.opentestsystem.org:10025 as per Scott Huitt.     #
 #  05/03/2014 - Add NOTIFY action to allow data file to include list of additional email          #
@@ -84,7 +96,7 @@ use HTTP::Request;
 # Control Variables - these variables controle the flow and/or output in the script (defaults shown in parentheses)
 
 my $consoleOutput      = 0;                                # (0) - 0 = disable console messages;   1 = enable console messages
-my $sendHTTPResponse   = 0;                                # (1) - 0 = do not send HTTP response;  1 = send HTTP response
+my $sendHTTPResponse   = 1;                                # (1) - 0 = do not send HTTP response;  1 = send HTTP response
 my $sendEmailResponse  = 1;                                # (1) - 0 = do not send email response; 1 = send email response
 my $extendedLogging    = 1;                                # (1) - 0 = disable extended logging;   1 = enable extended logging
 my $emailOverride      = 0;                                # (0) - 0 = use email addr from file;   1 = explicitly specify email addr
@@ -92,25 +104,24 @@ my $testXMLFile        = 0;                                # (0) - 0 = processin
 
 # Environmental Variables - these variables may be customized to reflect your environment
 
-my $inputXMLFileDir    = "/opt/dropboxes/amplify";         # folder where the XML files are uploaded
-my $processedFileDir   = "/opt/scripts/sbacXMLFiles";      # folder where the XML files are stored after processing
-my $httpResponseServer = "https://www.example.com/callback/";   # HTTP server for callback response
-my $ldapHost           = "localhost";                      # host name of the OpenDJ server
-my $ldapPort           = "1389";                           # port number of the OpenDJ server
-my $ldapBindDN         = "XXXXXXXXXXXXX";                  # replace with the bindDN of a service account or rootDN with permissions
-my $ldapBindPass       = "XXXXXXXXXXXXX";                  # replace with password of the OpenDJ service account
-
-my $ldapBaseDN         = "ou=People,dc=smarterbalanced,dc=org";   # location where the users may be found
-my $ldapTimeout        = "10";                             # how long to wait for a connection to the LDAP server before timing out
+my $inputXMLFileDir    = "[XML-UPLOAD]";                   # full path where the XML files are uploaded
+my $processedFileDir   = "[PROCESSED-FILES]";              # full path where the XML files are stored after processing
+my $httpResponseServer = "[CALLBACK-URL]";                 # HTTP server URL for response
+my $ldapHost           = "[LDAP-HOST]";                    # host name of the OpenDJ server
+my $ldapPort           = "[LDAP-PORT]";                    # port number of the OpenDJ server
+my $ldapBindDN         = "[BIND-DN]";                      # administrative user on the OpenDJ server for managing accounts (i.e. cn=XXX Admin)
+my $ldapBindPass       = "[BIND-PASSWORD]";                # password for the administrative user
+my $ldapBaseDN         = "[BASEDN]";                       # path in LDAP Server directory tree where the users may be found
+my $ldapTimeout        = "10";                             # how long to wait (in seconds) for a connection to the LDAP server before timing out
 
 # Email Variables - these variables are specific to subroutines which generate emails
 
-my $fromAddress       = 'Smarter-DoNotReply@example.com';  # all email will come from this email address
-my $fromPerson        = 'Smarter-DoNotReply';              # the name of the person sending the email
-my $emailAddrOverride = 'bill.nelson@identityfusion.com';  # when $emailOverride flag is set, send recipient's email to this addr
-my $adminEmail        = 'bill.nelson@identityfusion.com';  # email address of user who is monitoring script results
-my $emailServer       = "mail.example.com";                # replace with your email server 
-my $defaultPassword   = "password1";                       # default password for test users
+my $fromAddress       = '[EMAIL-SENDER]';                  # all email will come from this email address (i.e. bill.nelson@identityfusion.com)
+my $fromPerson        = '[EMAIL-NAME';                     # the name of the person sending the email (i.e. Bill Nelson)
+my $emailAddrOverride = '[OVERRIDE-EMAIL]';                # when $emailOverride flag is set, send recipient's email to this addr instead of recipient
+my $adminEmail        = '[ADMIN-EMAIL]';                   # email address of user who is monitoring script results
+my $emailServer       = "[EMAIL-SERVER]";                  # email server (i.e. mail.foo.com:10025)
+my $defaultPassword   = "[DEFAULT-PASSWORD]";              # default password for test users
 
 
 # Script Specific Variables - these are used within the processing of the script
@@ -354,7 +365,7 @@ my $processingTime = $endTime - $startTime;    # compute processing time
 if ($sendEmailResponse == 1) { 
 
     # notify the administrator of the process run results
-    my $emailSubject = "PROD: Smarter Balanced Data File Processed";
+    my $emailSubject = "Smarter Balanced Data File Processed";
     my $emailBody = "File name: $xmlFileName.<br><br>Total Procesing Time: $processingTime Seconds<br><br>Results: Total($userCount); Added($addCount); Modified($modCount); Deleted($delCount); Pass Reset($resetCount); Pass Change($pwdChgCount); Locked($lockCount); Unlocked($unlockCount); Synchronized($syncCount); Notify($notifyCount); Errors($errCount).<br><br>";
 
     if ($errCount > 0) {
@@ -392,6 +403,41 @@ updateLog("INFO", "\"*******************************\"");
 #                                           Subroutines                                                  #
 ##########################################################################################################
 
+
+##########################################################################################################
+# Subroutine:  translateCER()                                                                            #
+#                                                                                                        #
+# This subroutine translates Character Entity Records required within XML into single characters         #
+# accepted by OpenDJ.                                                                                    #
+##########################################################################################################
+
+sub translateCER {
+
+  my $input = $_[0];
+
+  # If Character Entity Records are in the data received by translateCER, translate them into single characters
+  if ( $input =~ m/&[^;]*;/ ) {
+
+    # Translate apostrophes
+    $input =~ s/&apos;/'/g;
+
+    # Escape translated double quotes with a backslash during the translation since this data is being 
+    # handled within double quotes in this script
+    $input =~ s/&quot;/\"/g;
+
+    # Translate less than
+    $input =~ s/&lt;/</g;
+
+    # Translate greater than
+    $input =~ s/&gt;/>/g;
+
+    # Translate ampersands
+    $input =~ s/&amp;/&/g;
+  }
+
+  return $input;
+
+} # end of translateCER()
 
 ##########################################################################################################
 # Subroutine:  processAddAction()                                                                        #
@@ -452,16 +498,16 @@ sub processAddAction {
 
       } elsif ($_ =~ /<FirstName>(.*)<\/FirstName>$/) {      # first name (givenName)
 
-          $givenName = $1;
+          $givenName = translateCER($1);
 
       } elsif ($_ =~ /<LastName>(.*)<\/LastName>$/) {        # last name (sn)
 
-          $sn = $1;
+          $sn = translateCER($1);
 
       } elsif ($_ =~ /<Email>(.*)<\/Email>$/) {              # email address (mail, uid)
 
-          $mail = $1;
-          $uid  = $1;
+          $mail = translateCER($1);
+          $uid  = $mail;
 
       } elsif ($_ =~ /<Phone>(.*)<\/Phone>$/) {              # telephone number (telephoneNumber)
 
@@ -529,7 +575,7 @@ sub processAddAction {
           # build/continue building the tenancy chain
           if ($_ =~ /\<.*\>(.*)\</.*\>$/) {   # this element has a value (i.e. <Name>Test Author</Name>)
 
-              $sbacTenancyChain .= "$1|";
+              $sbacTenancyChain .= translateCER($1)."|";
 
               if ($consoleOutput == 1) { print "Building Tenancy Chain: [$sbacTenancyChain]\n"; }
 
@@ -676,13 +722,13 @@ sub processAddAction {
       if ($testXMLFile == 0) {
 
           # notify the user that their account has been created
-          my $emailSubject = "PROD: Welcome to the Smarter Balanced Digital Library";
+          my $emailSubject = "Welcome to the Smarter Balanced development environment";
           my $emailBody = "Welcome, $cn, to Smarter Balanced!  Your account, $uid, has been created and your temporary password is: $userPassword<br><br>";
-             $emailBody .= "This account will let you immediately access the Smarter Balanced Digital Library. Other services of the Smarter Balanced Assessment Consortium come online in the fall of 2014 and you will use this same login to make use of those services.<br><br>";
+             $emailBody .= "This account will let you immediately access the Smarter Balanced development environment.<br><br>";
              $emailBody .= "You are required to change your temporary password.<br><br>";
-             $emailBody .= "Click the following link to access your account and update your password: <a href=\"https://www.smarterbalancedlibrary.org\">https://www.smarterbalancedlibrary.org</a>.<br><br>";
+             $emailBody .= "Click the following link to access your account and update your password: <a href=\"https://oam-secure.ci.opentestsystem.org/auth/UI/Login\">https://oam-secure.ci.opentestsystem.org/auth/UI/Login</a>.<br><br>";
              $emailBody .= "You will not be able to log into any Smarter Balanced systems until you have updated your temporary password and provided an answer to a security question.<br><br>";
-             $emailBody .= "You can find out more information about Smarter Balanced systems on the <a href=\"http://www.smarterbalanced.org/\">Smarter Balanced web site</a> at http://www.smarterbalanced.org/.<br><br>";
+             $emailBody .= "You can find out more information about Smarter Balanced systems on the <a href=\"http://portal-dev.opentestsystem.org/\">Smarter Balanced web site</a> at http://portal-dev.opentestsystem.org/.<br><br>";
 
           if ($emailOverride == 1) { 
               $mail = $emailAddrOverride;
@@ -724,6 +770,7 @@ sub processDelAction {
   if ($consoleOutput == 1) { print "\nDel User Array:   [@delUserArray]\n"; }
 
   foreach (@delUserArray) {
+
 
       if ($_ =~ /<UUID>(.*)<\/UUID>$/) {                     # UUID (sbacUUID)
           $DN  = "sbacUUID=$1,$ldapBaseDN";
@@ -819,16 +866,16 @@ sub processModAction {
 
       } elsif ($_ =~ /<FirstName>(.*)<\/FirstName>$/) {      # first name (givenName)
 
-          $givenName = $1;
+          $givenName = translateCER($1);
 
       } elsif ($_ =~ /<LastName>(.*)<\/LastName>$/) {        # last name (sn)
 
-          $sn = $1;
+          $sn = translateCER($1);
 
       } elsif ($_ =~ /<Email>(.*)<\/Email>$/) {              # email address (mail, uid)
 
-          $mail = $1;
-          $uid  = $1;
+          $mail = translateCER($1);
+          $uid  = $mail;
 
       } elsif ($_ =~ /<Phone>(.*)<\/Phone>$/) {              # telephone number (telephoneNumber)
 
@@ -895,7 +942,7 @@ sub processModAction {
           # build/continue building the tenancy chain
           if ($_ =~ /\<.*\>(.*)\</.*\>$/) {
 
-              $sbacTenancyChain .= "$1|";
+              $sbacTenancyChain .= translateCER($1)."|";
 
               if ($consoleOutput == 1) { print "Building Tenancy Chain: [$sbacTenancyChain]\n"; }
 
@@ -1143,6 +1190,7 @@ sub processResetAction {
   my $sbacuuid        = "";     # Smarter Balanced UUID
   my $DN              = "";     # User's Distinguished Name (constructed from $sbacuuid and constants)
   my $mail            = "";     # User's email address
+  my $message         = "";     # Optional message to include in the password reset notification.
   my $userPassword    = "";     # User's initial password
 
   foreach (@resetUserArray) {
@@ -1153,7 +1201,11 @@ sub processResetAction {
 
       } elsif ($_ =~ /<Email>(.*)<\/Email>$/) {              # email address (mail)
 
-          $mail = $1;
+          $mail = translateCER($1);
+
+      } elsif ($_ =~ /<Message>(.*)<\/Message>$/) {          # optional message (message)
+
+          $message = translateCER($1);
 
       } else {
 
@@ -1192,8 +1244,23 @@ sub processResetAction {
   } else {
 
       # notify the user that their password has been reset
-      my $emailSubject = "PROD: Smarter Balanced Digital Library Account Password Reset";
-      my $emailBody = "Your Smarter Balanced password has been reset.  Your temporary password is: $userPassword<br><br>You are required to change your password the next time you log in.<br><br>Click <a href=\"https://www.smarterbalancedlibrary.org\">here</a> to access your Smarter Balanced account now.";
+      my $emailSubject = "Smarter Balanced Digital Library Account Password Reset";
+
+      my $emailBody  = "Your Smarter Balanced password has been reset.  Your temporary password is: $userPassword<br><br>";
+
+         # if defined, include optional message
+         if ($message ne "") {
+
+            $emailBody .= "$message<br><br>";
+
+            if ( $extendedLogging == 1 ) { updateLog("INFO", "\"Included Message: $message)\""); }
+
+         } 
+
+         $emailBody .= "You are required to change your password the next time you log in.<br><br>";
+         $emailBody .= "Click <a href=\"https://oam-secure.ci.opentestsystem.org/auth/UI/Login\">here</a> to access your Smarter Balanced account now.";
+
+#     my $emailBody = "Your Smarter Balanced password has been reset.  Your temporary password is: $userPassword<br><br>You are required to change your password the next time you log in.<br><br>Click <a href=\"https://sbac.openam.airast.org/auth/UI/Login\">here</a> to access your Smarter Balanced account now.";
 
       if ($emailOverride == 1) {
           $mail = $emailAddrOverride;
@@ -1245,7 +1312,7 @@ sub processPwdChangeAction {
 
       } elsif ($_ =~ /<Email>(.*)<\/Email>$/) {              # email address (mail)
 
-          $mail = $1;
+          $mail = translateCER($1);
 
       } elsif ($_ =~ /<Password>(.*)<\/Password>$/) {        # new password (userPassword)
 
@@ -1284,7 +1351,7 @@ sub processPwdChangeAction {
 
   } else {
 
-      # COMMENTING OUT THE SENDING OF EMAIL FOR NOW (AS PER AIR REQTS).  LEAVING IT IN PLACE SHOULD REQTS CHANGE
+      # COMMENTING OUT THE SENDING OF EMAIL FOR NOW (AS PER REQTS).  LEAVING IT IN PLACE SHOULD REQTS CHANGE
 
       # notify the user that their password has been reset 
 #     my $emailSubject = "Smarter Balanced Password Change";
@@ -1457,8 +1524,10 @@ sub processNotifyAction {
 
       if ($_ =~ /<Email>(.*)<\/Email>$/) {                     
 
+          my $recipient = translateCER($1);
+
           # add recipient to the array
-          push(@emailList, $1);
+          push(@emailList, $recipient);
 
       } else {
 
@@ -1564,7 +1633,7 @@ sub updateLog {
   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
   my $yyyymmdd = sprintf "%.4d%.2d%.2d", $year+1900, $mon+1, $mday;
 
-  my $logFile  = "/opt/scripts/logs/sbaclogfile-$yyyymmdd";      # log File Name
+  my $logFile  = "/opt/scripts/drc/logs/sbaclogfile-$yyyymmdd";      # log File Name
 
   # open log file (make sure script user has permissions to write to directory)
   open (LOGFILE, ">>$logFile") || die "\nUnable to open log file ($logFile).  $!\n\n";
@@ -1779,7 +1848,7 @@ sub processEarlyExit {
   if ($sendEmailResponse == 1) { 
 
       # notify the administrator of the error
-      my $emailSubject = "PROD: Error Detected During Smarter Balanced Data File Processing";
+      my $emailSubject = "Error Detected During Smarter Balanced Data File Processing";
       my $toAddress = $adminEmail;
 
       if ($emailOverride == 1) { my $toAddress = $emailAddrOverride; }
