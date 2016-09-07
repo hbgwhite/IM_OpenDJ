@@ -1,6 +1,6 @@
 ----
-> # NOTE: This development repository is no longer being updated as of 3/25/2016.
-> # Please use the [release version](https://bitbucket.org/sbacoss/opendj_release) of this repository.
+> # NOTE: When deploying this component, edit the following perl script for the link URLs in the email content found on lines 729, 731, and 1261.
+> # [https://github.com/SmarterApp/IM_OpenDJ/blob/master/sbacInstaller/artifacts/scripts/sbacProcessXML.pl](https://github.com/SmarterApp/IM_OpenDJ/blob/master/sbacInstaller/artifacts/scripts/sbacProcessXML.pl)
 ----
 
 # Welcome to the OpenDJ Project #
