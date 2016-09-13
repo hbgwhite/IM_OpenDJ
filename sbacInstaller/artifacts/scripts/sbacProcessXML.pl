@@ -1,12 +1,16 @@
 #!/usr/bin/perl
 
 use strict;
+use warnings;
 use Net::LDAP;
 use Net::LDAP::Util qw(ldap_error_text);
 use Net::SMTP;
 use File::Copy qw(move);
 use LWP::UserAgent;
 use HTTP::Request;
+use Email::Sender::Simple qw(sendmail);
+use Email::Stuffer;
+use Email::Sender::Transport::SMTPS ();
 
 ###################################################################################################
 # Educational Online Test Delivery System                                                         #
@@ -36,6 +40,8 @@ use HTTP::Request;
 #                                                                                                 #
 # Change Log:                                                                                     #   
 #                                                                                                 #
+#  09/09/2016 - Updated email subroutine to use new libraries that allow email authentication     #
+#				w/server                                                                          #
 #  11/27/2015 - Modified processPasswordReset() to allow optional app defined message to be       #
 #               included in password reset message.                                               #
 #  02/27/2015 - Added translation of encoded CERs to Tenancy Chain received through XML           #
@@ -95,8 +101,8 @@ use HTTP::Request;
 
 # Control Variables - these variables controle the flow and/or output in the script (defaults shown in parentheses)
 
-my $consoleOutput      = 0;                                # (0) - 0 = disable console messages;   1 = enable console messages
-my $sendHTTPResponse   = 1;                                # (1) - 0 = do not send HTTP response;  1 = send HTTP response
+my $consoleOutput      = 1;                                # (0) - 0 = disable console messages;   1 = enable console messages
+my $sendHTTPResponse   = 0;                                # (1) - 0 = do not send HTTP response;  1 = send HTTP response
 my $sendEmailResponse  = 1;                                # (1) - 0 = do not send email response; 1 = send email response
 my $extendedLogging    = 1;                                # (1) - 0 = disable extended logging;   1 = enable extended logging
 my $emailOverride      = 0;                                # (0) - 0 = use email addr from file;   1 = explicitly specify email addr
@@ -104,24 +110,27 @@ my $testXMLFile        = 0;                                # (0) - 0 = processin
 
 # Environmental Variables - these variables may be customized to reflect your environment
 
-my $inputXMLFileDir    = "[XML-UPLOAD]";                   # full path where the XML files are uploaded
-my $processedFileDir   = "[PROCESSED-FILES]";              # full path where the XML files are stored after processing
-my $httpResponseServer = "[CALLBACK-URL]";                 # HTTP server URL for response
+my $inputXMLFileDir    = "[XML-UPLOAD]";                   # folder where the XML files are uploaded
+my $processedFileDir   = "[PROCESSED-FILES]";              # folder where the XML files are stored after processing
+my $httpResponseServer = "[CALLBACK-URL]";                 # HTTP server for callback response
 my $ldapHost           = "[LDAP-HOST]";                    # host name of the OpenDJ server
 my $ldapPort           = "[LDAP-PORT]";                    # port number of the OpenDJ server
-my $ldapBindDN         = "[BIND-DN]";                      # administrative user on the OpenDJ server for managing accounts (i.e. cn=XXX Admin)
-my $ldapBindPass       = "[BIND-PASSWORD]";                # password for the administrative user
-my $ldapBaseDN         = "[BASEDN]";                       # path in LDAP Server directory tree where the users may be found
-my $ldapTimeout        = "10";                             # how long to wait (in seconds) for a connection to the LDAP server before timing out
+my $ldapBindDN         = "[BIND-DN]";                      # replace with the bindDN of a service account or rootDN with permissions
+my $ldapBindPass       = "[BIND-PASSWORD]";                # replace with password of the OpenDJ service account
+my $ldapBaseDN         = "[BASEDN]";                       # location where the users may be found
+my $ldapTimeout        = "10";                             # how long to wait for a connection to the LDAP server before timing out
 
 # Email Variables - these variables are specific to subroutines which generate emails
 
-my $fromAddress       = '[EMAIL-SENDER]';                  # all email will come from this email address (i.e. bill.nelson@identityfusion.com)
-my $fromPerson        = '[EMAIL-NAME';                     # the name of the person sending the email (i.e. Bill Nelson)
-my $emailAddrOverride = '[OVERRIDE-EMAIL]';                # when $emailOverride flag is set, send recipient's email to this addr instead of recipient
+my $fromAddress       = '[EMAIL-SENDER]';                  # all email will come from this email address
+my $fromPerson        = '[EMAIL-NAME';                     # the name of the person sending the email
+my $emailAddrOverride = '[OVERRIDE-EMAIL]';                # when $emailOverride flag is set, send recipient's email to this addr
 my $adminEmail        = '[ADMIN-EMAIL]';                   # email address of user who is monitoring script results
-my $emailServer       = "[EMAIL-SERVER]";                  # email server (i.e. mail.foo.com:10025)
 my $defaultPassword   = "[DEFAULT-PASSWORD]";              # default password for test users
+my $smtpServer        = '[SMTP-SERVER]';                   # replace with your email server 
+my $smtpPort          = 25;                                # port to connect to on smtp server 
+my $smtpUser          = '[EMAIL-AUTHENTICATION-USER]';     # replace with your email server username
+my $smtpPassword      = '[EMAIL-AUTHENTICATION-PASSWORD]'; # replace with your email server password
 
 
 # Script Specific Variables - these are used within the processing of the script
@@ -1553,19 +1562,17 @@ sub processNotifyAction {
 sub sendEmail {
 
   # get parameters
-  my ($emailSubject,$emailBody,$toAddress,$fromAddress,$emailType) = @_;
+  my ($emailSubject,$emailBody,$toAddress,$fromAddress,$emailType, $smtpServer, $smtpPort, $smtpUser, $smtpPassword) = @_;
+  updateLog("DEBUG", "\nsubject=$_[0], body=$_[1], toAddress=$_[2], fromAddress=$_[3], emailType=$_[4], smtpServer=_[5], smtpPort=_[6], smtpUser=_[7], smtpPassword=_[8]\n");
 
-  # Open a connection to the email server (Net::SMTP support authentication if necessary)
-  my $smtp = Net::SMTP->new("$emailServer") or warn "Could not connect to email server!\n";
-
-  # Start the SMTP session 
-
-  # Uncomment and complete the following if authentication is required
-  # $smtp->auth($smtpuser, $smtppassword);
-  # $smtp->auth('AKIAJDK3WMPAGGC4ZCHQ', 'AuVbKKTGdJYkq6C+z78iZBSJkkw86PVFft4FHenBcjqC');
-
-  $smtp->mail( $fromAddress );           # use the MAIL command to provide the sender's email address
-  $smtp->to( $toAddress );               # use the TO command to provide the recipient's email address
+  my $email = Email::Stuffer->from($fromAddress)->to($toAddress)->subject($emailSubject)->html_body($emailBody)->email;
+  my $transport = Email::Sender::Transport::SMTPS->new({
+        host => $smtpServer,
+        port => $smtpPort,
+        ssl => "starttls",
+        sasl_username => $smtpUser,
+        sasl_password => $smtpPassword,
+  });  
 
   # Don't include additional recipients on non-admin email (the emailType will be either Admin or User)
   if ($emailType eq "Admin") {
@@ -1577,35 +1584,18 @@ sub sendEmail {
           my $emailListRecipient;
 
           foreach $emailListRecipient (@emailList) { 
-             $smtp->to( $emailListRecipient );
+             $email->to( $emailListRecipient );
   
              # Send message to log file indicating that the file has been moved
              updateLog("INFO", "\"Including $emailListRecipient on the email distribution list.\"");
-          }
-      }
+          }    
+       }    
 
-  }
+    }    
 
-  # Start the DATA for the SMTP session
+  sendmail($email, { transport => $transport });
 
-  $smtp->data();
-  $smtp->datasend("MIME-Version: 1.0\n");
-  $smtp->datasend("Content-Type: text/html; charset=us-ascii\n");
-
-  # Send the header.
-  $smtp->datasend("From: " . $fromAddress . "($fromPerson)\n");
-  $smtp->datasend("To: " . $toAddress . "\n");
-  $smtp->datasend("Subject: " . $emailSubject . "\n");
-  $smtp->datasend("\n");
-  $smtp->datasend("\n");
-
-  # Send the body.
-  $smtp->datasend( $emailBody );
-  $smtp->datasend("\n");
-  $smtp->dataend();
-  $smtp->quit;
-
-return 1;
+  return 1;
 
 }    # end of sendEmail()
 
