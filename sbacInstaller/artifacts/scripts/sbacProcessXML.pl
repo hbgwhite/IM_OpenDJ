@@ -132,6 +132,7 @@ my $smtpServer        = '[SMTP-SERVER]';                   # replace with your e
 my $smtpPort          = 25;                                # port to connect to on smtp server 
 my $smtpUser          = '[EMAIL-AUTHENTICATION-USER]';     # replace with your email server username
 my $smtpPassword      = '[EMAIL-AUTHENTICATION-PASSWORD]'; # replace with your email server password
+my $smtpSsl           = "starttls"                         # if 'starttls', use STARTTLS; if 'ssl' (or 1), connect securely; otherwise, no security
 
 
 # Script Specific Variables - these are used within the processing of the script
@@ -391,7 +392,7 @@ if ($sendEmailResponse == 1) {
     if ($emailOverride == 1) {
         $adminEmail = $emailAddrOverride;
     }
-    sendEmail($emailSubject,$emailBody,$adminEmail,$fromAddress,"Admin", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
+    sendEmail($emailSubject,$emailBody,$adminEmail,$fromAddress,"Admin", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth, $smtpSsl);
 
     # if extended logging is enabled, add additional details to log file
     if ( $extendedLogging == 1 ) { updateLog("INFO", "\"Administrator notified of run results ($adminEmail)\""); }
@@ -743,7 +744,7 @@ sub processAddAction {
           if ($emailOverride == 1) { 
               $mail = $emailAddrOverride;
           } 
-          sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
+          sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth, $smtpSsl);
 
           # if extended logging is enabled, add additional details to log file
           if ( $extendedLogging == 1 ) { updateLog("INFO", "\"User notified of new account ($mail)\""); }
@@ -1275,7 +1276,7 @@ sub processResetAction {
       if ($emailOverride == 1) {
           $mail = $emailAddrOverride;
       }
-      sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
+      sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth, $smtpSsl);
 
       # if extended logging is enabled, add additional details to log file
       if ( $extendedLogging == 1 ) { updateLog("INFO", "\"User notified of password reset ($mail)\""); }
@@ -1370,7 +1371,7 @@ sub processPwdChangeAction {
 #     if ($emailOverride == 1) {
 #         $mail = $emailAddrOverride;
 #     }
-#     sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
+#     sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth, $smtpSsl);
 
 #     # if extended logging is enabled, add additional details to log file
 #     if ( $extendedLogging == 1 ) { updateLog("INFO", "\"User notified of password reset ($mail)\""); }
@@ -1563,8 +1564,8 @@ sub processNotifyAction {
 sub sendEmail {
 
   # get parameters
-  my ($emailSubject,$emailBody,$toAddress,$fromAddress,$emailType, $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth) = @_;
-  updateLog("DEBUG", "\nsubject=$_[0], body=$_[1], toAddress=$_[2], fromAddress=$_[3], emailType=$_[4], smtpServer=_[5], smtpPort=_[6], smtpUser=_[7], smtpPassword=_[8], useSmtpAuth=_[9]\n");
+  my ($emailSubject,$emailBody,$toAddress,$fromAddress,$emailType, $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth, $smtpSsl) = @_;
+  updateLog("DEBUG", "\nsubject=$_[0], body=$_[1], toAddress=$_[2], fromAddress=$_[3], emailType=$_[4], smtpServer=$_[5], smtpPort=$_[6], smtpUser=$_[7], smtpPassword=$_[8], useSmtpAuth=$_[9], smtpSsl=$_[10]\n");
 
   my $email = Email::Stuffer->from($fromAddress)->to($toAddress)->subject($emailSubject)->html_body($emailBody)->email;
 
@@ -1572,7 +1573,7 @@ sub sendEmail {
         Email::Sender::Transport::SMTPS->new({
             host => $smtpServer,
             port => $smtpPort,
-            ssl => "starttls",
+            ssl => $smtpSsl,
             sasl_username => $smtpUser,
             sasl_password => $smtpPassword
       }) :   
@@ -1851,7 +1852,7 @@ sub processEarlyExit {
 
       if ($emailOverride == 1) { my $toAddress = $emailAddrOverride; }
 
-      sendEmail($emailSubject,$htmlFormattedErrorMessage,$toAddress,$fromAddress,"Admin", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
+      sendEmail($emailSubject,$htmlFormattedErrorMessage,$toAddress,$fromAddress,"Admin", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth, $smtpSsl);
   }
 
   ########## Update Log File ##########
