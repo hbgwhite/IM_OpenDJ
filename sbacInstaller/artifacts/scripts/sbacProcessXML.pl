@@ -391,7 +391,7 @@ if ($sendEmailResponse == 1) {
     if ($emailOverride == 1) {
         $adminEmail = $emailAddrOverride;
     }
-    sendEmail($emailSubject,$emailBody,$adminEmail,$fromAddress,"Admin");
+    sendEmail($emailSubject,$emailBody,$adminEmail,$fromAddress,"Admin", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
 
     # if extended logging is enabled, add additional details to log file
     if ( $extendedLogging == 1 ) { updateLog("INFO", "\"Administrator notified of run results ($adminEmail)\""); }
@@ -743,7 +743,7 @@ sub processAddAction {
           if ($emailOverride == 1) { 
               $mail = $emailAddrOverride;
           } 
-          sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User");
+          sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
 
           # if extended logging is enabled, add additional details to log file
           if ( $extendedLogging == 1 ) { updateLog("INFO", "\"User notified of new account ($mail)\""); }
@@ -1275,7 +1275,7 @@ sub processResetAction {
       if ($emailOverride == 1) {
           $mail = $emailAddrOverride;
       }
-      sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User");
+      sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
 
       # if extended logging is enabled, add additional details to log file
       if ( $extendedLogging == 1 ) { updateLog("INFO", "\"User notified of password reset ($mail)\""); }
@@ -1370,7 +1370,7 @@ sub processPwdChangeAction {
 #     if ($emailOverride == 1) {
 #         $mail = $emailAddrOverride;
 #     }
-#     sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User");
+#     sendEmail($emailSubject,$emailBody,$mail,$fromAddress,"User", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
 
 #     # if extended logging is enabled, add additional details to log file
 #     if ( $extendedLogging == 1 ) { updateLog("INFO", "\"User notified of password reset ($mail)\""); }
@@ -1568,7 +1568,7 @@ sub sendEmail {
 
   my $email = Email::Stuffer->from($fromAddress)->to($toAddress)->subject($emailSubject)->html_body($emailBody)->email;
 
-  my $transport = (useSmtpAuth == 1) ?
+  my $transport = ($useSmtpAuth == 1) ?
         Email::Sender::Transport::SMTPS->new({
             host => $smtpServer,
             port => $smtpPort,
@@ -1851,7 +1851,7 @@ sub processEarlyExit {
 
       if ($emailOverride == 1) { my $toAddress = $emailAddrOverride; }
 
-      sendEmail($emailSubject,$htmlFormattedErrorMessage,$toAddress,$fromAddress,"Admin");
+      sendEmail($emailSubject,$htmlFormattedErrorMessage,$toAddress,$fromAddress,"Admin", $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth);
   }
 
   ########## Update Log File ##########
