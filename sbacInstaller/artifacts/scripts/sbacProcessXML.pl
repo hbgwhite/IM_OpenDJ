@@ -101,9 +101,10 @@ use Email::Sender::Transport::SMTPS ();
 
 # Control Variables - these variables controle the flow and/or output in the script (defaults shown in parentheses)
 
-my $consoleOutput      = 1;                                # (0) - 0 = disable console messages;   1 = enable console messages
-my $sendHTTPResponse   = 0;                                # (1) - 0 = do not send HTTP response;  1 = send HTTP response
+my $consoleOutput      = 0;                                # (0) - 0 = disable console messages;   1 = enable console messages
+my $sendHTTPResponse   = 1;                                # (1) - 0 = do not send HTTP response;  1 = send HTTP response
 my $sendEmailResponse  = 1;                                # (1) - 0 = do not send email response; 1 = send email response
+my $useSmtpAuth        = 1;                                # (1) - 0 = do not include auth credentials when emailing; 1 = include auth credentials when emailing
 my $extendedLogging    = 1;                                # (1) - 0 = disable extended logging;   1 = enable extended logging
 my $emailOverride      = 0;                                # (0) - 0 = use email addr from file;   1 = explicitly specify email addr
 my $testXMLFile        = 0;                                # (0) - 0 = processing real XML file;   1 = processing test XML file
@@ -1562,17 +1563,24 @@ sub processNotifyAction {
 sub sendEmail {
 
   # get parameters
-  my ($emailSubject,$emailBody,$toAddress,$fromAddress,$emailType, $smtpServer, $smtpPort, $smtpUser, $smtpPassword) = @_;
-  updateLog("DEBUG", "\nsubject=$_[0], body=$_[1], toAddress=$_[2], fromAddress=$_[3], emailType=$_[4], smtpServer=_[5], smtpPort=_[6], smtpUser=_[7], smtpPassword=_[8]\n");
+  my ($emailSubject,$emailBody,$toAddress,$fromAddress,$emailType, $smtpServer, $smtpPort, $smtpUser, $smtpPassword, $useSmtpAuth) = @_;
+  updateLog("DEBUG", "\nsubject=$_[0], body=$_[1], toAddress=$_[2], fromAddress=$_[3], emailType=$_[4], smtpServer=_[5], smtpPort=_[6], smtpUser=_[7], smtpPassword=_[8], useSmtpAuth=_[9]\n");
 
   my $email = Email::Stuffer->from($fromAddress)->to($toAddress)->subject($emailSubject)->html_body($emailBody)->email;
-  my $transport = Email::Sender::Transport::SMTPS->new({
-        host => $smtpServer,
-        port => $smtpPort,
-        ssl => "starttls",
-        sasl_username => $smtpUser,
-        sasl_password => $smtpPassword,
-  });  
+
+  my $transport = (useSmtpAuth == 1) ?
+        Email::Sender::Transport::SMTPS->new({
+            host => $smtpServer,
+            port => $smtpPort,
+            ssl => "starttls",
+            sasl_username => $smtpUser,
+            sasl_password => $smtpPassword
+      }) :   
+        Email::Sender::Transport::SMTPS->new({
+            host => $smtpServer,
+            port => $smtpPort
+      });
+    
 
   # Don't include additional recipients on non-admin email (the emailType will be either Admin or User)
   if ($emailType eq "Admin") {
